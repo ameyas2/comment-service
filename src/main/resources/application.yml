@@ -10,6 +10,63 @@ spring:
   application:
     name: comment-service
   datasource:
+    url: ${DATASOURCE.URL}
+    username: ${DATASOURCE.USERNAME}
+    password: ${DATASOURCE.PASSWORD}
+    driver-class-name: ${DATASOURCE.DRIVER}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA.DDL}
+    properties:
+      hibernate:
+        #dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: ${JPA.FORMAT_SQL}
+    show-sql: ${JPA.SHOW_SQL}
+  data:
+    redis:
+      host: 192.168.29.206
+      port: 6379
+
+external-server:
+  hazelcast:
+    host: ${HAZELCAST.HOST}
+    port: ${HAZELCAST.PORT}
+    cluster-name: ${HAZELCAST.CLUSTER_NAME}
+  user-service:
+    host: ${USER_SERVICE.HOST}
+  post-service:
+    host: ${POST_SERVICE.HOST}
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  server:
+    port: 10015
+  security:
+    enabled: false
+
+---
+
+server:
+  servlet:
+    context-path: /comment-service
+  port: 10005
+
+spring:
+  threads:
+    virtual:
+      enabled: true
+  config:
+    activate:
+      on-profile: dev
+  application:
+    name: comment-service
+  datasource:
     url: jdbc:postgresql://192.168.29.206:26257/posts_application
     username: root
     password:
@@ -22,3 +79,35 @@ spring:
         #dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: true
+  data:
+    redis:
+      host: 192.168.29.206
+      port: 6379
+  cassandra:
+    contact-points: [192.168.29.206]
+    port: 9042
+    keyspace-name: posts_application
+    local-datacenter: datacenter1
+
+external-server:
+  hazelcast:
+    host: 192.168.29.212
+    port: 5701
+    cluster-name: hazel_cluster
+  user-service:
+    host: http://192.168.29.206
+  post-service:
+    host: http://192.168.29.206
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  server:
+    port: 10015
+  security:
+    enabled: false

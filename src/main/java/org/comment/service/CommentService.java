@@ -2,21 +2,23 @@ package org.comment.service;
 
 import lombok.extern.log4j.Log4j2;
 import org.comment.dao.CommentDao;
+import org.comment.dao.CommentDaoAsync;
 import org.comment.http.PostServiceHTTP;
 import org.comment.http.UserServiceHTTP;
+import org.instancio.Instancio;
+import org.instancio.Select;
 import org.posts.dto.CommentDTO;
 import org.posts.dto.PostDTO;
 import org.posts.dto.UserDTO;
 import org.posts.mapper.CommentMapper;
 import org.posts.mapper.PostMapper;
 import org.posts.mapper.UserMapper;
-import org.posts.model.Comment;
-import org.posts.model.Post;
-import org.posts.model.User;
+import org.posts.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @Log4j2
@@ -24,6 +26,9 @@ public class CommentService {
 
     @Autowired
     private CommentDao commentDao;
+
+    @Autowired
+    private CommentDaoAsync commentDaoAsync;
 
     @Autowired
     private CommentMapper commentMapper;
@@ -42,10 +47,8 @@ public class CommentService {
 
     public CommentDTO getCommentById(UUID id) {
         Comment comment = getComment(id);
-        User user = comment.getUser();
         Post post = comment.getPost();
         CommentDTO commentDTO = commentMapper.toCommentDto(comment);
-        commentDTO.setUserDTO(userMapper.toUserDTO(user));
         commentDTO.setPostDTO(postMapper.toPostDTO(post));
         return commentDTO;
     }
@@ -60,22 +63,8 @@ public class CommentService {
         }
     }
 
-    public CommentDTO getRandomComment() {
-        Random random = new Random();
-        int index = (int)random.nextLong(commentDao.count());
-        UUID commentId = commentDao.getCommentId(index);
-        return commentMapper.toCommentDto(getComment(commentId));
-    }
-
     public List<CommentDTO> getCommentsByPostId(UUID postId) {
         List<Comment> comments = commentDao.getCommentsByPostId(postId);
-        return comments.stream()
-                .map(comment -> commentMapper.toCommentDto(comment))
-                .toList();
-    }
-
-    public List<CommentDTO> getCommentsByUserId(UUID userId) {
-        List<Comment> comments = commentDao.getCommentsByUserId(userId);
         return comments.stream()
                 .map(comment -> commentMapper.toCommentDto(comment))
                 .toList();
@@ -99,18 +88,25 @@ public class CommentService {
         comment.setDescription(commentDTO.getDescription());
     }
 
+    public CommentDTO getRandomComment() {
+        return commentMapper.toCommentDto(commentDao.getAnyComment().orElse(null));
+    }
 
     public CommentDTO addRandomComment() {
-        Random random = new Random();
-        String description = generateRandomSentences(random.nextInt(10,41));
-        //String username = generateRandomSentences(random.nextInt(2));
+        log.info("Adding Random comment");
+        Comment comment = Instancio.of(Comment.class)
+                .generate(Select.field("description"),
+                        gen -> gen.string().minLength(50).mixedCase())
+                .ignore(Select.field("post"))
+                .ignore(Select.field(AbstractEntity.class, "id"))
+                .ignore(Select.field(AbstractEntity.class, "createdAt"))
+                .ignore(Select.field(AbstractEntity.class, "updatedAt"))
+                .create();
+        log.info("Created Random comment : {}", comment.getId());
         PostDTO postDTO = postServiceHTTP.getRandomPost();
         Post post = postMapper.toPost(postDTO);
-
-        UserDTO userDTO = userServiceHTTP.getUserById(postDTO.getUserDTO().getId());
-        User user = userMapper.toUser(userDTO);
-
-        Comment comment = Comment.of(description,post, user);
+        comment.setPost(post);
+        log.info("Set Post : {}", post.getId());
         commentDao.saveComment(comment);
         log.info("Added new Comment with id: {}", comment.getId());
         return commentMapper.toCommentDto(comment);
@@ -125,24 +121,35 @@ public class CommentService {
         return commentOptional.get();
     }
 
-    private String generateRandomSentences(int wordCount) {
-        StringBuilder sentence = new StringBuilder();
-        for(int i = 0; i < wordCount; i++) {
-            sentence.append(generateRandomWord() + " ");
-        }
-        return sentence.toString().trim();
+
+    public CommentDTO asyncCommentSave() {
+        log.info("Adding Random comment");
+        Comment comment = Instancio.of(Comment.class)
+                .generate(Select.field("description"),
+                        gen -> gen.string().minLength(50).mixedCase())
+                .ignore(Select.field("post"))
+                .ignore(Select.field(AbstractEntity.class, "id"))
+                .ignore(Select.field(AbstractEntity.class, "createdAt"))
+                .ignore(Select.field(AbstractEntity.class, "updatedAt"))
+                .create();
+        log.info("Created Random comment : {}", comment.getId());
+        PostDTO postDTO = postServiceHTTP.getRandomPost();
+        Post post = postMapper.toPost(postDTO);
+        comment.setPost(post);
+        log.info("Set Post : {}", post.getId());
+
+        commentDaoAsync.jpaSave(comment);
+
+        CompletableFuture<Comment> hazelcastSave = commentDaoAsync.hazelCastSave(comment);
+        CompletableFuture<CommentRedis> redisSave = commentDaoAsync.redisSave(comment);
+        CompletableFuture<CommentCassandra> cassandraSave = commentDaoAsync.cassandraSave(comment);
+
+        CompletableFuture.allOf(hazelcastSave, redisSave, cassandraSave).join();
+
+        log.info("Added new Comment with id: {}", comment.getId());
+        return commentMapper.toCommentDto(comment);
     }
 
-    private String generateRandomWord() {
-        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        Random random = new Random();
-        int wordLength = random.nextInt(5, 15);
-        StringBuilder builder = new StringBuilder();
-        for(int i = 0; i < wordLength; i++) {
-            builder.append(characters.charAt(random.nextInt(characters.length())));
-        }
-        return builder.toString();
-    }
 
     /*private Collection<PostDTO> postDTOs(Collection<Post> posts) {
         return posts.stream().map(post -> postMapper.toPostDTO(post)).toList();

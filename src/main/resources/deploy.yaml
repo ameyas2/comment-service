@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: comment-service-svc
+  labels:
+    app: comment-service-svc
+spec:
+  selector:
+    app: comment-service-depl
+  ports:
+    - name: svc-port
+      port: 10005
+      protocol: TCP
+      targetPort: 10005
+    - name: actuator-port
+      port: 10015
+      protocol: TCP
+      targetPort: 10015
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: comment-service-depl
+  labels:
+    app: comment-service-depl
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate # This is the default and can be omitted
+    rollingUpdate:
+      maxUnavailable: 25% # Max percentage of Pods that can be unavailable during the update
+      maxSurge: 25%
+  selector:
+    matchLabels:
+      app: comment-service-depl
+  template:
+    metadata:
+      labels:
+        app: comment-service-depl
+    spec:
+      containers:
+        - image: ameyas5/comment-service
+          name: comment-service
+          ports:
+            - name: svc-port
+              containerPort: 10005
+            - name: actuator-port
+              containerPort: 10015
+          resources:
+            requests:
+              memory: "1G"
+              cpu: "0.5"
+            limits:
+              memory: "2G"
+              cpu: "1"
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: comment-service-config
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: comment-service-config
+data:
+  HAZELCAST.HOST: "192.168.29.212"
+  HAZELCAST.CLUSTER_NAME: "hazel_cluster"
+  HAZELCAST.PORT: "5701"
+  DATASOURCE.URL: "jdbc:postgresql://192.168.29.206:26257/posts_application"
+  DATASOURCE.USERNAME: "root"
+  DATASOURCE.PASSWORD: ""
+  DATASOURCE.DRIVER: "org.postgresql.Driver"
+  JPA.DDL: "none"
+  JPA.FORMAT_SQL: "false"
+  JPA.SHOW_SQL: "false"
+  USER_SERVICE.HOST: "http://192.168.29.206"
+  POST_SERVICE.HOST: "http://192.168.29.206"

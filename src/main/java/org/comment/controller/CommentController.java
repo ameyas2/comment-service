@@ -39,11 +39,6 @@ public class CommentController {
         return ResponseEntity.ok(commentService.getCommentsByPostId(postId));
     }
 
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<Collection<CommentDTO>> getCommentsByUserId(@PathVariable("userId") UUID userId) {
-        return ResponseEntity.ok(commentService.getCommentsByUserId(userId));
-    }
-
 
     @PostMapping("/load")
     public ResponseEntity<CommentDTO> addRandomComment() {
@@ -53,5 +48,10 @@ public class CommentController {
     @GetMapping("/load")
     public ResponseEntity<CommentDTO> getRandomComment() {
         return ResponseEntity.ok(commentService.getRandomComment());
+    }
+
+    @PostMapping("/load/async")
+    public ResponseEntity<CommentDTO> addRandomCommentAsync() {
+        return ResponseEntity.ok(commentService.asyncCommentSave());
     }
 }
